@@ -4,6 +4,41 @@
 #define DIO 3
 TM1637Display display(CLK, DIO);
 
+class Buffer {
+  public:
+    Buffer(int);
+    void insert(int value);
+    int average();
+
+  private:
+    int size;
+    int *buffer;
+    int index;
+    int sum;
+};
+
+Buffer::Buffer(int n) {
+  size = n;
+  index = 0;
+  sum = 0;
+  buffer = new int [size];
+
+  for (int i=0; i<size; i++) {
+    buffer[i] = 0;
+  }
+}
+
+void Buffer::insert(int value) {
+  sum -= buffer[index];
+  sum += value;
+  buffer[index] = value;
+  index = (index + 1) % size;
+}
+
+int Buffer::average() {
+  return sum / size;
+}
+
 static const int bufferSize = 100;
 
 int buffer[bufferSize];
@@ -11,6 +46,7 @@ int bufferIndex;
 int bufferSum;
 int previousSensorValue;
 int previousSign;
+Buffer buff(10);
 
 void initializeBuffer() {
   bufferIndex = 0;
@@ -33,6 +69,7 @@ int bufferAverage() {
 
 void setup() {
   display.setBrightness(0x08);
+
   initializeBuffer();
   previousSensorValue = 0;
   previousSign = 0;
