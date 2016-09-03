@@ -4,24 +4,26 @@
 #define DIO 3
 TM1637Display display(CLK, DIO);
 
+const int flexPin = A0;
+
 class Buffer {
   public:
-    Buffer(int);
+    Buffer(unsigned int);
     void insert(int value);
     int average();
 
   private:
-    int size;
+    unsigned int size;
     int *buffer;
     int index;
-    int sum;
+    long sum;
 };
 
-Buffer::Buffer(int n) {
+Buffer::Buffer(unsigned int n) {
   size = n;
   index = 0;
   sum = 0;
-  buffer = new int [size];
+  buffer = (int *) malloc(size * sizeof(int));
 
   for (int i=0; i<size; i++) {
     buffer[i] = 0;
@@ -39,43 +41,20 @@ int Buffer::average() {
   return sum / size;
 }
 
-static const int bufferSize = 100;
-
-int buffer[bufferSize];
-int bufferIndex;
-int bufferSum;
 int previousSensorValue;
 int previousSign;
-Buffer buff(10);
-
-void initializeBuffer() {
-  bufferIndex = 0;
-  bufferSum = 0;
-  for (int i=0; i<bufferSize; i++) {
-    buffer[i] = 0;
-  }
-}
-
-void insertIntoBuffer(int value) {
-  bufferSum -= buffer[bufferIndex];
-  bufferSum += value;
-  buffer[bufferIndex] = value;
-  bufferIndex = (bufferIndex + 1) % bufferSize;
-}
-
-int bufferAverage() {
-  return bufferSum / bufferSize;
-}
+Buffer buffer(32);
 
 void setup() {
+  Serial.begin(9600);
   display.setBrightness(0x08);
-
-  initializeBuffer();
   previousSensorValue = 0;
   previousSign = 0;
+  pinMode(flexPin, INPUT);
 }
 
 int readSensor() {
+  return analogRead(flexPin);
 }
 
 int signChange() {
@@ -83,8 +62,15 @@ int signChange() {
 
 void loop() {
   int rawSensor = readSensor();
-  insertIntoBuffer(rawSensor);
-  int sensorValue = bufferAverage();
+  /*Serial.print("rawSensor: ");*/
+  /*Serial.println(rawSensor);*/
+  /*display.showNumberDec(rawSensor, false, 4, 0);*/
+
+  buffer.insert(rawSensor);
+  int sensorValue = buffer.average();
+
+  display.showNumberDec(sensorValue, false, 4, 0);
+
   int diff = sensorValue - previousSensorValue;
   int sign;
 
