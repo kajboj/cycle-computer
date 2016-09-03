@@ -4,13 +4,12 @@
 #define DIO 3
 TM1637Display display(CLK, DIO);
 
-const int flexPin = A0;
-
 class Buffer {
   public:
     Buffer(unsigned int);
     void insert(int value);
-    int average();
+    int getAverage();
+    int getSize();
 
   private:
     unsigned int size;
@@ -37,53 +36,98 @@ void Buffer::insert(int value) {
   index = (index + 1) % size;
 }
 
-int Buffer::average() {
+int Buffer::getAverage() {
   return sum / size;
 }
 
-int previousSensorValue;
-int previousSign;
-Buffer buffer(32);
+int Buffer::getSize() {
+  return size;
+}
+
+typedef unsigned long Millis;
+
+const int flexPin = A0;
+const int flexThreshold = 20;
+const Millis millisPerMinute = 60000;
+const int sensorBufferSize = 32;
+const int perMinuteBufferSize = 4;
+
+Buffer sensorBuffer(sensorBufferSize);
+Buffer perMinuteBuffer(perMinuteBufferSize);
+int baseValue;
+boolean aboveThreshold;
+Millis lastTickTime;
+
+int readSensor() {
+  int rawSensor =  analogRead(flexPin);
+  sensorBuffer.insert(rawSensor);
+  return rawSensor;
+}
+
+void calibrateSensor() {
+  for (int i=0; i<sensorBuffer.getSize(); i++) {
+    readSensor();
+  }
+  baseValue = sensorBuffer.getAverage();
+}
 
 void setup() {
   Serial.begin(9600);
+
   display.setBrightness(0x08);
-  previousSensorValue = 0;
-  previousSign = 0;
+  display.showNumberDec(0, false, 4, 0);
+
   pinMode(flexPin, INPUT);
+
+  calibrateSensor();
+  aboveThreshold = false;
 }
 
-int readSensor() {
-  return analogRead(flexPin);
+int tick() {
 }
 
-int signChange() {
+boolean isTick(int sensorValue) {
+  int diff = sensorValue - baseValue;
+
+  if (diff > flexThreshold) {
+    if (!aboveThreshold) {
+      aboveThreshold = true;
+      return true;
+    }
+  } else {
+    aboveThreshold = false;
+  }
+  return false;
+}
+
+void displayCadence(int cadence) {
+  display.showNumberDec(cadence, false, 4, 0);
 }
 
 void loop() {
   int rawSensor = readSensor();
-  /*Serial.print("rawSensor: ");*/
-  /*Serial.println(rawSensor);*/
-  /*display.showNumberDec(rawSensor, false, 4, 0);*/
 
-  buffer.insert(rawSensor);
-  int sensorValue = buffer.average();
+  int sensorValue = sensorBuffer.getAverage();
 
-  display.showNumberDec(sensorValue, false, 4, 0);
+  Millis time = millis();
+  Millis timeSinceLastTick = time - lastTickTime;
 
-  int diff = sensorValue - previousSensorValue;
-  int sign;
+  if (isTick(sensorValue)) {
+    Serial.println("tick");
+    Serial.print(" timeSinceLastTick ");
+    Serial.println(timeSinceLastTick);
 
-  if (diff >= 0) {
-    sign = 1;
-  } else {
-    sign = -1;
+    int perMinute = millisPerMinute / timeSinceLastTick;
+
+    if (perMinute < 500) {
+      Serial.print(" perMinute ");
+      Serial.println(perMinute);
+
+      perMinuteBuffer.insert(perMinute);
+
+      displayCadence(perMinuteBuffer.getAverage());
+
+      lastTickTime = time;
+    }
   }
-
-  if (sign * previousSign < 0) {
-    signChange();
-  }
-
-  int previousSensorValue = sensorValue;
-  int previousSign = sign;
 }
